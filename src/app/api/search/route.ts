@@ -78,7 +78,7 @@ async function queryPinecone(queryVector: any) {
     try {
         const queryResponse = await index.namespace("api_docs").query({
             vector: queryVector,
-            topK: 2,
+            topK: 4,
             includeMetadata: true
         });
         return queryResponse.matches;
@@ -99,11 +99,9 @@ export async function llmCall(
 ): Promise<string | null> {
     try {
         let concatenatedData: string[] = [];
-        console.log(data, "data");
 
         for (let i = 0; i < data.length; i++) {
             const metadataData = data[i]?.metadata?.data;
-
             if (metadataData) {
                 if (Array.isArray(metadataData)) {
                     concatenatedData = concatenatedData.concat(metadataData);
@@ -113,49 +111,49 @@ export async function llmCall(
             }
         }
 
-        console.log(concatenatedData, "final concatenatedData");
-
         const isCodeRequest = question.toLowerCase().match(
             /(code|example|curl|api|endpoint|reference|how to use|implementation|snippet)/
         );
 
         const role = `
-You are an API documentation assistant being very polite. You'll be provided with API documentation to generate helpful responses.
+You are a specialized API documentation assistant. Your purpose is to provide accurate, detailed responses based on the provided API documentation.
 
-Your responses must follow this JSON structure:
+Analysis Requirements:
+1. Thoroughly examine ALL provided documentation sections
+2. Cross-reference related endpoints and features
+3. Consider authentication, rate limits, and dependencies
+4. Look for specific version requirements or deprecation notices
+
+Response Structure:
 {
-    "content": "Clear explanation of the relevant information",
-    ${isCodeRequest ? `"code": "Complete curl command example with all necessary headers and data"` : ""}
-}
-
-Key guidelines:
-- Only include code examples when specifically asked about implementation or when showing the API usage is necessary
-- Keep explanations clear and concise
-- Focus on answering the exact question asked
-- Don't include code snippets for general questions about functionality`;
+    "content": {
+        "answer": "Primary response to the question",
+        "authentication": "Required auth details if applicable",
+        "limitations": "Rate limits, restrictions, or prerequisites if applicable",
+        "relatedEndpoints": "List of related endpoints if relevant"
+    }${isCodeRequest ? `,
+    "code": {
+        "curl": "Complete curl example with headers and body",
+        "parameters": "Explanation of each parameter used",
+        "response": "Example response format"
+    }` : ""}
+}`;
 
         const payloadTemplate = `
-Given the following API documentation and question: "${question}"
+Context: Analyze the following API documentation to answer this question: "${question}"
 
-Generate a helpful response that:
-1. Addresses the specific question asked
-2. ${isCodeRequest ? 'Provides a complete curl example if relevant' : 'Focuses on explaining the functionality'}
-3. Mentions authentication requirements if relevant
-
-Format the response as a JSON object following this structure:
-{
-    "content": "Brief and clear explanation",
-    ${isCodeRequest ? `"code": "Curl command example if relevant to the question"` : ""}
-}
-
-API Documentation:
+Documentation to analyze:
 ${JSON.stringify(concatenatedData, null, 2)}
 
-Requirements:
-- Keep the content explanation clear and concise
-- Only include code if specifically asked or absolutely necessary
-- Always mention authentication requirements when relevant
-- Format the response as a valid JSON object`;
+Response Requirements:
+1. Search thoroughly through ALL documentation sections
+2. Verify compatibility and version requirements
+3. Include all necessary authentication details
+4. ${isCodeRequest ? 'Provide complete, tested code examples' : 'Focus on functional explanation'}
+5. Mention any relevant rate limits or restrictions
+6. Reference related endpoints or features that may be helpful
+
+Format your response as a valid JSON object following the structure defined above.`;
 
         const response = await model.generateContent([role, payloadTemplate]);
 

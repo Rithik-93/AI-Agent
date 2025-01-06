@@ -5,7 +5,6 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { generateEmbedding } from '../db/ai';
 import { INDEX_HOST } from '../search/route';
 
-
 const genAI = new GoogleGenerativeAI(process.env.GEMINI!);
 const model = genAI.getGenerativeModel({
     model: 'gemini-1.5-flash'

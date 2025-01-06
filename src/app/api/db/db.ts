@@ -4,11 +4,11 @@ export const pc = new Pinecone({
   apiKey: process.env.PINECONE_API!,
 });
 
-export const indexName = process.env.INDEX_NAME!;
+export const indexName = "testing2";
 
 // await pc.createIndex({
 //   name: indexName,
-//   dimension: 768,
+//   dimension: 1024,
 //   metric: 'cosine',
 //   spec: { 
 //     serverless: { 
@@ -18,5 +18,5 @@ export const indexName = process.env.INDEX_NAME!;
 //   } 
 // });
 
-const a = await pc.describeIndex(indexName);
-// console.log(a);
+// const a = await pc.describeIndex(indexName);
+// // console.log(a);

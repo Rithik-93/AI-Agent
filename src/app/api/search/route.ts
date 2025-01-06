@@ -12,21 +12,54 @@ declare module "@pinecone-database/pinecone" {
 }
 
 export const indexName = process.env.INDEX_NAME!;
-export const INDEX_HOST = process.env.INDEX_HOST!;  
+export const INDEX_HOST = process.env.INDEX_HOST!;
 const index = pc.index(indexName, INDEX_HOST);
 
-export async function POST(req: NextRequest, res: NextResponse) {
+export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { question, prev } = body;
+        const { question, prev = [] } = body;
         if (!question) {
             return NextResponse.json({ error: 'Missing query parameter' }, { status: 400 });
         }
 
-        const queryVector = await generateEmbedding(question);
+        const allMessages = [...prev, question];
 
-        const results = await queryPinecone(queryVector);
+        type Embedding = number[];
 
+        const embeddings: Embedding[] = await Promise.all(
+            allMessages.map((msg) => generateEmbedding(msg))
+        );
+
+        if (!embeddings.length || !embeddings[0]?.length) {
+            throw new Error('Invalid embeddings generated');
+        }
+
+        const weights = allMessages.map((_, index) =>
+            Math.exp((index - allMessages.length + 1) * 0.5)
+        );
+
+        const weightSum = weights.reduce((a, b) => a + b, 0);
+
+        const vectorSize = embeddings[0].length;
+        const combinedVector: number[] = new Array(vectorSize).fill(0);
+
+        for (let i = 0; i < embeddings.length; i++) {
+            const normalizedWeight = weights[i] / weightSum;
+            const embedding = embeddings[i];
+
+            if (embedding.length !== vectorSize) {
+                console.error(`Embedding ${i} has incorrect size`);
+                continue;
+            }
+
+            for (let j = 0; j < vectorSize; j++) {
+                combinedVector[j] += embedding[j] * normalizedWeight;
+            }
+        }
+
+        const results = await queryPinecone(combinedVector);
+        console.log("resultssssssssssssssssssssss", results);
 
         const response = await llmCall(results, question);
 
@@ -67,51 +100,63 @@ export async function llmCall(
 ) {
     try {
         let concatenatedData: string[] = [];
+        console.log(data, "data");
+
         for (let i = 0; i < data.length; i++) {
-            if (Array.isArray(data[i]?.metadata?.data)) {
-                concatenatedData = concatenatedData.concat(data[i]?.metadata?.data as string[]);
+            const metadataData = data[i]?.metadata?.data;
+
+            if (metadataData) {
+                if (Array.isArray(metadataData)) {
+                    concatenatedData = concatenatedData.concat(metadataData);
+                } else {
+                    concatenatedData.push(metadataData.toString());
+                }
             }
         }
+
+        console.log(concatenatedData, "final concatenatedData");
 
         const isCodeRequest = question.toLowerCase().match(
             /(code|example|curl|api|endpoint|reference|how to use|implementation|snippet)/
         );
 
         const role = `
-  You are an API documentation assistant being very polite. You'll be provided with API documentation and must generate helpful responses.
-  
-  Your responses must follow this JSON structure:
-  {
-      "content": "Clear explanation of the relevant information",
-      ${isCodeRequest ? `"code": "Complete curl command example with all necessary headers and data"` : ""}
-  }
-  
-  Key guidelines:
-  - Only include code examples when specifically asked about implementation or when showing the API usage is necessary
-  - Keep explanations clear and concise
-  - Focus on answering the exact question asked
-  - Don't include code snippets for general questions about functionality`;
+You are an API documentation assistant being very polite. You'll be provided with API documentation to generate helpful responses.
+
+Your responses must follow this JSON structure:
+{
+    "content": "Clear explanation of the relevant information",
+    ${isCodeRequest ? `"code": "Complete curl command example with all necessary headers and data"` : ""}
+}
+
+Key guidelines:
+- Only include code examples when specifically asked about implementation or when showing the API usage is necessary
+- Keep explanations clear and concise
+- Focus on answering the exact question asked
+- Don't include code snippets for general questions about functionality`;
 
         const payloadTemplate = `
-  Given the following API documentation and question: "${question}", generate a helpful response that:
-  1. Addresses the specific question asked
-  2. ${isCodeRequest ? 'Provides a complete curl example if relevant' : 'Focuses on explaining the functionality'}
-  3. Mentions authentication requirements if relevant
-  
-  Format the response as a JSON object following this structure:
-  {
-      "content": "Brief and clear explanation",
-      ${isCodeRequest ? `"code": "Curl command example if relevant to the question"` : ""}
-  }
-  
-  API Documentation:
-  ${JSON.stringify(concatenatedData, null, 2)}
-  
-  Requirements:
-  - Keep the content explanation clear and concise
-  - Only include code if specifically asked or absolutely necessary
-  - Always mention authentication requirements when relevant
-  - Format the response as a valid JSON object`;
+Given the following API documentation and question: "${question}"
+
+Generate a helpful response that:
+1. Addresses the specific question asked
+2. ${isCodeRequest ? 'Provides a complete curl example if relevant' : 'Focuses on explaining the functionality'}
+3. Mentions authentication requirements if relevant
+
+Format the response as a JSON object following this structure:
+{
+    "content": "Brief and clear explanation",
+    ${isCodeRequest ? `"code": "Curl command example if relevant to the question"` : ""}
+}
+
+API Documentation:
+${JSON.stringify(concatenatedData, null, 2)}
+
+Requirements:
+- Keep the content explanation clear and concise
+- Only include code if specifically asked or absolutely necessary
+- Always mention authentication requirements when relevant
+- Format the response as a valid JSON object`;
 
         const response = await model.generateContent([role, payloadTemplate]);
 

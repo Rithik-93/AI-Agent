@@ -19,4 +19,4 @@ export const indexName = process.env.INDEX_NAME!;
 // });
 
 const a = await pc.describeIndex(indexName);
-console.log(a);
+// console.log(a);

@@ -16,10 +16,8 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  // const prevValue = usePrev(input);
   const [prevValue, setPrevValue] = useState<string[]>([]);
 
-  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -43,18 +41,15 @@ export default function Home() {
 
       const data = await response.json();
       
-      const jsonString = data.response.replace(/```json\n|\n```/g, '');
-      const parsedResponse = JSON.parse(jsonString);
-
       const assistantMessage: Message = {
         role: 'assistant',
-        content: parsedResponse.content + (parsedResponse.code ? '\n\n' + parsedResponse.code : ''),
+        content: data.response,
       };
 
       setMessages(prev => [...prev, assistantMessage]);
       setPrevValue(prev => [...prev, input]);
     } catch (error) {
-      console.error('Parsing error:', error);
+      console.error('Error:', error);
       const errorMessage: Message = {
         role: 'assistant',
         content: 'Sorry, there was an error processing your request. Please try again.',

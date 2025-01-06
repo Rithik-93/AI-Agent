@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateEmbedding } from "../db/ai";
 import { pc } from "../db/db";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { validateApiResponse } from "../actions/action";
 import { RecordMetadata, ScoredPineconeRecord } from "@pinecone-database/pinecone";
 
 declare module "@pinecone-database/pinecone" {
@@ -97,7 +96,7 @@ const model = genAI.getGenerativeModel({
 export async function llmCall(
     data: ScoredPineconeRecord<RecordMetadata>[],
     question: string
-) {
+): Promise<string | null> {
     try {
         let concatenatedData: string[] = [];
         console.log(data, "data");

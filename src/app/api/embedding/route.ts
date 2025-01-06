@@ -28,7 +28,7 @@ async function upsertToPinecone(data:any, embedding:any) {
     }
 }
 
-export async function POST(req: NextRequest, res: NextResponse) {
+export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
         const { summary } = body;

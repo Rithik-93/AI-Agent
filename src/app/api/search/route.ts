@@ -79,12 +79,17 @@ async function queryPinecone(queryVector: any) {
         const queryResponse = await index.namespace("api_docs").query({
             vector: queryVector,
             topK: 4,
-            includeMetadata: true
+            includeMetadata: true,
+            
+            // filter: {
+            //     threshold: 0.4
+            // },
+
         });
         return queryResponse.matches;
     } catch (error) {
         console.error('Error querying Pinecone:', error);
-        throw error;
+        throw new Error(`Pinecone query failed: ${error}`);
     }
 }
 
@@ -112,7 +117,7 @@ export async function llmCall(
         }
 
         const isCodeRequest = question.toLowerCase().match(
-            /(code|example|curl|api|endpoint|reference|how to use|implementation|snippet)/
+            /(code|example|curl|api|endpoint|reference|how to use|implementation| implement| snippet)/
         );
 
         const role = `
@@ -126,14 +131,9 @@ Analysis Requirements:
 
 Response Structure:
 {
-    "content": {
-        "answer": "Primary response to the question",
-        "authentication": "Required auth details if applicable",
-        "limitations": "Rate limits, restrictions, or prerequisites if applicable",
-        "relatedEndpoints": "List of related endpoints if relevant"
-    }${isCodeRequest ? `,
+    "content":  "Primary response to the question",${isCodeRequest ? `,
     "code": {
-        "curl": "Complete curl example with headers and body",
+        "curl": "Complete code api call(curl or python) example with headers and body",
         "parameters": "Explanation of each parameter used",
         "response": "Example response format"
     }` : ""}

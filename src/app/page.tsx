@@ -40,10 +40,51 @@ export default function Home() {
       }
 
       const data = await response.json();
-      
+
+
+
+
+
+
+      interface Content {
+        answer: string;
+        authentication?: string;
+        limitations?: string;
+        relatedEndpoints?: string[];
+      }
+
+      interface LLMResponse {
+        content: Content;
+        code?: {
+          curl?: string;
+          parameters?: string;
+          response?: string;
+        };
+      }
+
+      function parseResponse(response: string): LLMResponse {
+        try {
+          // Remove markdown code block syntax if present
+          const cleanResponse = response.replace(/```json\n|\n```/g, '');
+          const parsed = JSON.parse(cleanResponse);
+          return parsed;
+        } catch (error) {
+          throw new Error(`Failed to parse response: ${error}`);
+        }
+      }
+
+      const parsedResponse = parseResponse(data.response);
+      const formattedContent = [
+        parsedResponse.content.answer,
+        parsedResponse.content.authentication && `\nAuthentication: ${parsedResponse.content.authentication}`,
+        parsedResponse.content.limitations && `\nLimitations: ${parsedResponse.content.limitations}`,
+        parsedResponse.code && `\nCode Example:\n${Object.entries(parsedResponse.code).map(([key, value]) =>
+          `${key.toUpperCase()}:\n${value}`).join('\n')}`
+      ].filter(Boolean).join('\n');
+
       const assistantMessage: Message = {
         role: 'assistant',
-        content: data.response,
+        content: formattedContent,
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -65,7 +106,7 @@ export default function Home() {
     <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
       <Card className="w-full max-w-2xl">
         <CardHeader>
-          <CardTitle>AI Coding Assistant</CardTitle>
+          <CardTitle>AI Assistant</CardTitle>
         </CardHeader>
         <CardContent>
           <ScrollArea className="h-[60vh] pr-4">

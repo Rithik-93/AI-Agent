@@ -58,16 +58,23 @@ export async function POST(req: NextRequest) {
         }
 
         const results = await queryPinecone(combinedVector);
-        console.log("resultssssssssssssssssssssss", results);
 
-        const response = await llmCall(results, question);
+        const llmResponse = await llmCall(results, question);
 
+        const response = parseLLMResponse(llmResponse || "");
+
+        const content = response.content;
+        const api = response.API;
+        const code = response.code;
+        if ( !api || !code) {
+            return NextResponse.json({ content }, { status: 201 });
+        }
         // let res;
         // if (response) {
         //     res = await validateApiResponse(response);
         // }
 
-        return NextResponse.json({ response });
+        return NextResponse.json({ content, code }, { status: 200 });
     } catch (error) {
         console.error('Error processing request:', error);
         return NextResponse.json({ error: 'Server error' }, { status: 500 });
@@ -80,7 +87,7 @@ async function queryPinecone(queryVector: any) {
             vector: queryVector,
             topK: 4,
             includeMetadata: true,
-            
+
             // filter: {
             //     threshold: 0.4
             // },
@@ -116,26 +123,25 @@ export async function llmCall(
             }
         }
 
-        const isCodeRequest = question.toLowerCase().match(
-            /(code|example|curl|api|endpoint|reference|how to use|implementation| implement| snippet)/
-        );
+        const isCodeRequest: boolean = /(code|example|curl|api|endpoint|reference|how to use|implementation|implement|snippet)/.test(question.toLowerCase());
+        console.log(isCodeRequest, "asdasd");
 
         const role = `
 You are a specialized API documentation assistant. Your purpose is to provide accurate, detailed responses based on the provided API documentation.
 
 Analysis Requirements:
 1. Thoroughly examine ALL provided documentation sections
-2. Cross-reference related endpoints and features
-3. Consider authentication, rate limits, and dependencies
-4. Look for specific version requirements or deprecation notices
+2. Cross-reference related endpoints and features(if it exists)
+3. Consider authentication, rate limits, and dependencies(if it exists)
+4. Look for specific version requirements or deprecation notices(if it exists)
 
 Response Structure:
 {
-    "content":  "Primary response to the question",${isCodeRequest ? `,
+    "content":  "Primary response to the question"(not more than 80 words),${isCodeRequest ? `,
+    "API": "The api that user asked for. e.g. "https://api.crustdata.com/screener/company"",    
     "code": {
         "curl": "Complete code api call(curl or python) example with headers and body",
-        "parameters": "Explanation of each parameter used",
-        "response": "Example response format"
+        "example": "Example curl code of the api call with headers and body and whatever is needed for that api call",
     }` : ""}
 }`;
 
@@ -167,3 +173,34 @@ Format your response as a valid JSON object following the structure defined abov
         return null;
     }
 }
+
+interface LLMResponse {
+    content: string;
+    [key: string]: any;
+}
+
+class ParseError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'ParseError';
+    }
+}
+
+export function parseLLMResponse(responseText: string): LLMResponse {
+    const jsonPattern = /```json\n([\s\S]*?)\n```/;
+    const match = responseText.match(jsonPattern);
+
+    if (!match) {
+        throw new ParseError('No JSON code block found in response');
+    }
+
+    const jsonStr = match[1];
+
+    try {
+        const parsed = JSON.parse(jsonStr);
+        return parsed as LLMResponse;
+    } catch (error) {
+        throw new ParseError(`Failed to parse JSON content: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+}
+

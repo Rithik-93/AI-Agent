@@ -1,15 +1,67 @@
 'use client';
 import React, { useState } from 'react';
 import { Send } from 'lucide-react';
-import { ChatMessage } from './components/chatme';
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
-type Message = {
+interface CodeBlock {
+  curl?: string;
+  example?: string;
+}
+
+interface ApiResponse {
+  content: string;
+  code?: CodeBlock;
+}
+
+interface Message {
   role: 'user' | 'assistant';
   content: string;
+  code?: CodeBlock;
+}
+
+const ChatMessage: React.FC<Message> = ({ role, content, code }) => {
+  const isJson = content.startsWith('{') && content.endsWith('}');
+  let parsedContent: ApiResponse | null = null;
+  
+  if (isJson) {
+    try {
+      parsedContent = JSON.parse(content);
+    } catch (e) {
+      console.error('Failed to parse JSON content:', e);
+    }
+  }
+
+  return (
+    <div className={`flex ${role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}>
+      <div className={`rounded-lg p-4 max-w-[80%] ${
+        role === 'user' 
+          ? 'bg-blue-500 text-white' 
+          : 'bg-gray-100 text-gray-900'
+      }`}>
+        {parsedContent ? (
+          <div className="space-y-4">
+            <div>{parsedContent.content}</div>
+            {parsedContent.code && (
+              <div className="mt-2 space-y-2">
+                {parsedContent.code.curl && (
+                  <div className="bg-gray-800 text-white p-3 rounded-md overflow-x-auto">
+                    <code className="text-sm font-mono">
+                      {parsedContent.code.curl}
+                    </code>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div>{content}</div>
+        )}
+      </div>
+    </div>
+  );
 };
 
 export default function Home() {
@@ -40,51 +92,9 @@ export default function Home() {
       }
 
       const data = await response.json();
-
-
-
-
-
-
-      interface Content {
-        answer: string;
-        authentication?: string;
-        limitations?: string;
-        relatedEndpoints?: string[];
-      }
-
-      interface LLMResponse {
-        content: Content;
-        code?: {
-          curl?: string;
-          parameters?: string;
-          response?: string;
-        };
-      }
-
-      function parseResponse(response: string): LLMResponse {
-        try {
-          // Remove markdown code block syntax if present
-          const cleanResponse = response.replace(/```json\n|\n```/g, '');
-          const parsed = JSON.parse(cleanResponse);
-          return parsed;
-        } catch (error) {
-          throw new Error(`Failed to parse response: ${error}`);
-        }
-      }
-
-      const parsedResponse = parseResponse(data.response);
-      const formattedContent = [
-        parsedResponse.content.answer,
-        parsedResponse.content.authentication && `\nAuthentication: ${parsedResponse.content.authentication}`,
-        parsedResponse.content.limitations && `\nLimitations: ${parsedResponse.content.limitations}`,
-        parsedResponse.code && `\nCode Example:\n${Object.entries(parsedResponse.code).map(([key, value]) =>
-          `${key.toUpperCase()}:\n${value}`).join('\n')}`
-      ].filter(Boolean).join('\n');
-
       const assistantMessage: Message = {
         role: 'assistant',
-        content: formattedContent,
+        content: JSON.stringify(data, null, 2),
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -116,6 +126,7 @@ export default function Home() {
                   key={index}
                   role={message.role}
                   content={message.content}
+                  code={message.code}
                 />
               ))}
               {isLoading && (
@@ -151,4 +162,3 @@ export default function Home() {
     </div>
   );
 }
-

@@ -58,6 +58,14 @@ export async function POST(req: NextRequest) {
         }
 
         const results = await queryPinecone(combinedVector);
+        console.log(results[0]?.score);
+
+        if (!results.length) {
+            return NextResponse.json({ content: defaultPrompt }, { status: 200 });
+        }
+        if ( results[0]?.score !== undefined && results[0]?.score < 0.55) {
+            return NextResponse.json({ content: defaultPrompt }, { status: 200 });
+        }
 
         const llmResponse = await llmCall(results, question);
 
@@ -99,6 +107,7 @@ async function queryPinecone(queryVector: any) {
         throw new Error(`Pinecone query failed: ${error}`);
     }
 }
+const defaultPrompt = `Hey there!👋 \n Hmm, I couldn’t find anything that matches your request super well. Maybe try rephrasing or giving me a bit more detail? I’ll do my best to help you out! 😊`
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI!)
 const model = genAI.getGenerativeModel({
